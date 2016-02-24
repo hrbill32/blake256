@@ -1,0 +1,141 @@
+/*
+Υλοποίηση της συνάρτησης hash "BLAKE-256" που παρουσιάζεται στην ενότητα 2.1 στο pdf.
+
+Βασίλης Κοντόπουλος (Π10048)
+*/
+
+module blake256 where
+private
+
+	iv: [8][32]
+	iv = [0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19]
+
+	piFirstDigits: [16][32]
+	piFirstDigits = [0x243F6A88, 0x85A308D3, 0x13198A2E, 0x03707344, 0xA4093822, 0x299F31D0, 0x082EFA98, 0xEC4E6C89, 0x452821E6, 0x38D01377, 0xBE5466CF, 0x34E90C6C, 0xC0AC29B7, 0xC97C50DD, 0x3F84D5B5, 0xB5470917]
+
+	sigma: [10][16][4]
+	sigma = [
+		[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+		[14, 10, 4, 8, 9, 15, 13, 6, 1, 12, 0, 2, 11, 7, 5, 3],
+		[11, 8, 12, 0, 5, 2, 15, 13, 10, 14, 3, 6, 7, 1, 9, 4],
+		[7, 9, 3, 1, 13, 12, 11, 14, 2, 6, 5, 10, 4, 0, 15, 8],
+		[9, 0, 5, 7, 2, 4, 10, 15, 14, 1, 11, 12, 6, 8, 3, 13],
+		[2, 12, 6, 10, 0, 11, 8, 3, 4, 13, 7, 5, 15, 14, 1, 9],
+		[12, 5, 1, 15, 14, 13, 4, 10, 0, 7, 6, 3, 9, 2, 8, 11],
+		[13, 11, 7, 14, 12, 1, 3, 9, 5, 0, 15, 4, 8, 6, 2, 10],
+		[6, 15, 14, 9, 11, 3, 0, 8, 12, 2, 13, 7, 1, 4, 10, 5],
+		[10, 2, 8, 4, 7, 6, 1, 5, 15, 11, 9, 14, 3, 12, 13, 0]
+	]
+	
+	/*
+	Αντιστοιχεί στην συνάρτηση "Compression function" που παρουσιάζεται στην ενότητα 2.1.2 στο pdf.
+	*/
+	compress: ([8][32], [16][32], [4][32], [2][32]) -> [8][32]
+	compress(h, m, s, t) = hNew
+		where
+		v = [
+			h@0, h@1, h@2, h@3,
+			h@4, h@5, h@6, h@7,
+			(s@0) ^ (piFirstDigits@0), (s@1) ^ (piFirstDigits@1), (s@2) ^ (piFirstDigits@2), (s@3) ^ (piFirstDigits@3),
+			(t@0) ^ (piFirstDigits@4), (t@0) ^ (piFirstDigits@5), (t@1) ^ (piFirstDigits@6), (t@1) ^ (piFirstDigits@7)
+		]
+		vResult = [v] # [round(m, r, vVar) | r <- [0..13] | vVar <- vResult]
+		vFinal = vResult!0
+		hNew0 = (h@0) ^ (s@0) ^ (vFinal@0) ^ (vFinal@8)
+		hNew1 = (h@1) ^ (s@1) ^ (vFinal@1) ^ (vFinal@9)
+		hNew2 = (h@2) ^ (s@2) ^ (vFinal@2) ^ (vFinal@10)
+		hNew3 = (h@3) ^ (s@3) ^ (vFinal@3) ^ (vFinal@11)
+		hNew4 = (h@4) ^ (s@0) ^ (vFinal@4) ^ (vFinal@12)
+		hNew5 = (h@5) ^ (s@1) ^ (vFinal@5) ^ (vFinal@13)
+		hNew6 = (h@6) ^ (s@2) ^ (vFinal@6) ^ (vFinal@14)
+		hNew7 = (h@7) ^ (s@3) ^ (vFinal@7) ^ (vFinal@15)
+		hNew = [hNew0, hNew1, hNew2, hNew3, hNew4, hNew5, hNew6, hNew7]
+		
+	/*
+	Αντιστοιχεί στην συνάρτηση "Round function" που παρουσιάζεται στην ενότητα 2.1.2 στο pdf.
+	*/
+	round: ([16][32], [4], [16][32]) -> [16][32]
+	round(m, r, v) = vNew
+		where
+		// Τα G0, G1, G2, G3 μπορούν να υπολογιστούν ανεξάρτητα οπότε ο τρόπος που τα υπολογίζουμε δεν έχει πρόβλημα.
+		(v0, v4, v8, v12) = G(m, r, 0, v@0, v@4, v@8, v@12)
+		(v1, v5, v9, v13) = G(m, r, 1, v@1, v@5, v@9, v@13)
+		(v2, v6, v10, v14) = G(m, r, 2, v@2, v@6, v@10, v@14)
+		(v3, v7, v11, v15) = G(m, r, 3, v@3, v@7, v@11, v@15)
+		// Τα G4, G5, G6, G7 μπορούν να υπολογιστούν ανεξάρτητα οπότε ο τρόπος που τα υπολογίζουμε δεν έχει πρόβλημα.
+		(v0_2, v5_2, v10_2, v15_2) = G(m, r, 4, v0, v5, v10, v15)
+		(v1_2, v6_2, v11_2, v12_2) = G(m, r, 5, v1, v6, v11, v12)
+		(v2_2, v7_2, v8_2, v13_2) = G(m, r, 6, v2, v7, v8, v13)
+		(v3_2, v4_2, v9_2, v14_2) = G(m, r, 7, v3, v4, v9, v14)
+		vNew = [v0_2, v1_2, v2_2, v3_2, v4_2, v5_2, v6_2, v7_2, v8_2, v9_2, v10_2, v11_2, v12_2, v13_2, v14_2, v15_2]
+	
+	/*
+	Αντιστοιχεί στην συνάρτηση "G" που παρουσιάζεται στην ενότητα 2.1.2 στο pdf.
+	*/
+	G: ([16][32], [4], [3], [32], [32], [32], [32]) -> ([32], [32], [32], [32])
+	G(m, r, i, a, b, c, d) = (a2, b2, c2, d2)
+		where
+		i5 = 0b00 # i // Επεκτείνουμε το i σε 5 bits ώστε να γίνουν οι παρακάτω πράξεις με το i σωστά.
+		// Στο pdf στην σελίδα 10 αναφέρεται πως χρησιμοποιείται r % 10 αντί για σκέτο r όπως είναι στον τύπο στην σελίδα 9.
+		a1 = a + b + ((m@(sigma@(r % 10)@(2 * i5))) ^ (piFirstDigits@(sigma@(r % 10)@(2 * i5 + 1))))		
+		d1 = (d ^ a1) >>> 16
+		c1 = c + d1
+		b1 = (b ^ c1) >>> 12
+		// Στο pdf στην σελίδα 10 αναφέρεται πως χρησιμοποιείται r % 10 αντί για σκέτο r όπως είναι στον τύπο στην σελίδα 9.
+		a2 = a1 + b1 + ((m@(sigma@(r % 10)@(2 *i5 + 1))) ^ (piFirstDigits@(sigma@(r % 10)@(2 * i5))))		
+		d2 = (d1 ^ a2) >>> 8
+		c2 = c1 + d2
+		b2 = (b1 ^ c2) >>> 7
+
+	/*
+	Αντιστοιχεί στο "Padding" που παρουσιάζεται στην ενότητα 2.1.3 στο pdf.
+	*/
+	padMessage: {length, zeroPadLength}(
+		length >= 1,
+		length <= 2 ^^ 64 - 1,
+		zeroPadLength == (((length + 1) % 512) / 448) * 512 + 447 - (length + 1) %512
+	) => [length] -> [length+zeroPadLength + 66]
+	padMessage(m) = m # (1:[1]) # (zero:[zeroPadLength]) # (1:[1]) # (`length:[64])
+	
+	/*
+	Επιστρέφει την άπειρη ακολουθία [ℓ_0,...,ℓ_(N_1), 0, 0, 0,...]. Όπου ℓ_i ο αριθμός όπως ορίζεται στην ενότητα 2.1.3 στο τμήμα
+	"Iterated hash" του pdf. Ο λόγος που στο τέλος βάζουμε άπειρα 0 είναι μόνο για προγραμματιστικούς λόγους. Θα μπορούσαμε να υπολογίζουμε
+	απευθείας το [ℓ_0,...,ℓ_(N_1)] όμως η συνάρτηση θα ήταν λίγο πιο πολύπλοκη.
+	*/
+	createOriginalLengths: {mBits}(mBits >= 1, mBits <= 2 ^^ 64 - 1) => [inf][64]
+	createOriginalLengths = result
+		where
+		/* Η άπειρη ακολουθία θα αρχίσει από την αρχή όταν θα φτάσει μετά το 2 ^^ 64 - 1. Αυτό όμως δεν μας επηρεάζει επειδή το
+		   τμήμα που χρησιμοποιούμε είναι πριν αρχίσει η επανάληψη. */
+		lengthsHead = take`{front = mBits / 512}([512:[64], 512 + 512...])
+		remainder = (`mBits:[64]) % 512
+		last = if (remainder == 0) then [0:[64]] else [`mBits:[64]]
+		result = lengthsHead # last # (zero:[inf][64])
+
+/*
+Αντιστοιχεί στην συνάρτηση hash "BLAKE-256" που παρουσιάζεται στην ενότητα 2.1 στο pdf.
+*/
+blake256: {length, zeroPadLength, blockCount}(
+	length >= 1,
+	length <= 2 ^^ 64 - 1,
+	zeroPadLength == (((length + 1) % 512) / 448) * 512 + 447 - (length + 1) % 512,
+	512 * blockCount == length + zeroPadLength + 66
+) => ([length], [4][32]) -> [8][32]
+blake256(m, s) = h
+	where
+	mPadded: [length + zeroPadLength + 66]
+	mPadded = padMessage(m)
+	blocks: [blockCount][512]
+	blocks = split`{parts = blockCount}(mPadded)
+	/* Το originalLengths έχει άπειρα 0 στο τέλος, όμως με τον τρόπο που υπολογίζουμε το inputArray παρακάτω, τελικά θα χρησιμοποιηθεί
+	   μόνο το τμήμα του originalLengths που πραγματικά μας ενδιαφέρει. */
+	originalLengths: [inf][64]
+	originalLengths = createOriginalLengths`{length}
+	inputArray: [blockCount]([16][32], [2][32])
+	inputArray = [(split`{each = 32}(block), reverse(split`{each = 32}(originalLength))) | block <- blocks | originalLength <- originalLengths]
+	/* Στην ενότητα C.1 στο pdf παρατηρούμε ότι τα 64 bit του counter μετατρέπονται σε ένα πίνακα 2 32-bit στοιχείων όπου το πρώτο στοιχείο
+	   είναι τα 32 λιγότερο σημαντικά bit και το δεύτερο στοιχείο είναι τα 32 περισσότερο σημαντικά bit. Αυτός είναι και ο λόγος που παραπάνω
+	   χρησιμοποιούμε την συνάρτηση reverse. */
+	iteratedHashes: [_][8][32]
+	iteratedHashes = [iv] # [compress(hash, input.0, s, input.1) | input <- inputArray | hash <- iteratedHashes]
+	h = iteratedHashes!0
